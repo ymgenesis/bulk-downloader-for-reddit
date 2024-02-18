@@ -145,3 +145,5 @@ test_config.cfg
 
 .vscode/
 .idea/
+bdfr/.DS_Store
+bdfr/default_config.cfg

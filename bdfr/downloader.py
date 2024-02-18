@@ -147,8 +147,6 @@ class RedditDownloader(RedditConnector):
                 logger.exception(e)
                 logger.error(f"Failed to write file in submission {submission.id} to {destination}: {e}")
                 return
-            creation_time = time.mktime(datetime.fromtimestamp(submission.created_utc).timetuple())
-            os.utime(destination, (creation_time, creation_time))
             self.master_hash_list[resource_hash] = destination
             logger.debug(f"Hash added to master list: {resource_hash}")
         logger.info(f"Downloaded submission {submission.id} from {submission.subreddit.display_name}")
