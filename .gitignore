@@ -147,3 +147,4 @@ test_config.cfg
 .idea/
 bdfr/.DS_Store
 bdfr/default_config.cfg
+.DS_Store
