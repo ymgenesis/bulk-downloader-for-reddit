@@ -95,18 +95,6 @@ class RedditDownloader(RedditConnector):
 			logger.debug(f"Submission {submission.id} filtered due to URL {submission.url}")
 			return
 
-		# Get/process ratelimits
-		self.reddit_instance.get('/')
-		limits = self.reddit_instance.auth.limits
-		remaining = limits['remaining']
-		reset_timestamp = limits['reset_timestamp']
-		used = limits['used']
-		reset_datetime = datetime.fromtimestamp(reset_timestamp)
-		current_datetime = datetime.now()
-		timeuntilreset = (reset_datetime - current_datetime)
-		timeuntilresetsec = "{:.2f}".format(timeuntilreset.total_seconds())
-		logger.info(f"Remaining calls: {remaining}, Used: {used}, Reset time: {timeuntilresetsec}")
-
 		logger.debug(f"\u001b[34mAttempting\033[0m to download submission {submission.id}")
 		try:
 			downloader_class = DownloadFactory.pull_lever(submission.url)

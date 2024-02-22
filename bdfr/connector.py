@@ -167,6 +167,17 @@ class RedditConnector(metaclass=ABCMeta):
                 token_manager=token_manager,
                 ratelimit_seconds=120,
             )
+            # Get/process ratelimits
+            self.reddit_instance.get('/')
+            limits = self.reddit_instance.auth.limits
+            remaining = limits['remaining']
+            reset_timestamp = limits['reset_timestamp']
+            used = limits['used']
+            reset_datetime = datetime.fromtimestamp(reset_timestamp)
+            current_datetime = datetime.now()
+            timeuntilreset = (reset_datetime - current_datetime)
+            timeuntilresetsec = "{:.2f}".format(timeuntilreset.total_seconds())
+            logger.info(f"Remaining calls: {remaining}, Used: {used}, Reset time: {timeuntilresetsec}")
         else:
             logger.debug("Using unauthenticated Reddit instance")
             logger.warning(
