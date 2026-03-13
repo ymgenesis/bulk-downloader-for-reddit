@@ -22,7 +22,7 @@ class Configuration(Namespace):
         self.downvoted: bool = False
         self.exclude_id = []
         self.exclude_id_file = []
-        self.file_scheme: str = "{REDDITOR}_{TITLE}_{UPVOTES}_{POSTID}"
+        self.file_scheme: str = "({REDDITOR})_{TITLE}_{UPVOTES}_{POSTID}"
         self.filename_restriction_scheme = None
         self.folder_scheme: str = "{SUBREDDIT}"
         self.ignore_user = []
