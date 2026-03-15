@@ -20,6 +20,7 @@ import prawcore
 from bdfr import exceptions as errors
 from bdfr.configuration import Configuration
 from bdfr.connector import RedditConnector
+from bdfr.metadata_writer import MetadataWriter
 from bdfr.site_downloaders.download_factory import DownloadFactory
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,15 @@ class RedditDownloader(RedditConnector):
 		super().__init__(args, logging_handlers)
 		if self.args.search_existing:
 			self.master_hash_list = self.scan_existing_files(self.download_directory)
+		self.metadata_writer = None
+		if self.args.write_xmp:
+			self.metadata_writer = MetadataWriter(
+				exiftool_path=self.args.exiftool_path,
+				exiftool_config=self.args.exiftool_config,
+			)
+			logger.info(
+				f"Metadata writing enabled: exiftool={self.args.exiftool_path} config={self.args.exiftool_config}"
+			)
 
 	def download(self) -> None:
 		with logging_redirect_tqdm():
@@ -111,7 +121,7 @@ class RedditDownloader(RedditConnector):
 		except errors.SiteDownloaderError as e:
 			logger.error(f"Site {downloader_class.__name__} failed to download submission {submission.id}: {e}")
 			return
-		for destination, res in self.file_name_formatter.format_resource_paths(content, self.download_directory):
+		for destination, res, gallery_index in self.file_name_formatter.format_resource_paths(content, self.download_directory):
 			if destination.exists():
 				logger.debug(f"File {destination} from submission {submission.id} already exists, continuing")
 				continue
@@ -155,6 +165,22 @@ class RedditDownloader(RedditConnector):
 			current_time = time.mktime(datetime.now().timetuple())
 			os.utime(destination, (creation_time, creation_time))
 			os.utime(destination, (current_time, current_time))			
+			if self.metadata_writer:
+				user = submission.author.name if submission.author else "DELETED"
+				votes = submission.score if isinstance(submission.score, int) else None
+				meta_ok = self.metadata_writer.write_reddit_tags(
+					file_path=destination,
+					user=user,
+					title=submission.title,
+					post_id=submission.id,
+					votes=votes,
+					gallery_index=gallery_index,
+					write_title=self.args.write_title,
+				)
+				if meta_ok:
+					logger.info(f"Metadata written for {destination}")
+				else:
+					logger.warning(f"Metadata write failed for {destination}")
 			self.master_hash_list[resource_hash] = destination
 			logger.debug(f"Hash added to master list: {resource_hash}")
 		logger.info(f"Downloaded submission {submission.id} from {submission.subreddit.display_name}")

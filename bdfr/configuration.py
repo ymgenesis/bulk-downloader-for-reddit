@@ -24,6 +24,10 @@ class Configuration(Namespace):
         self.exclude_id_file = []
         self.file_scheme: str = "({REDDITOR})_{TITLE}_{UPVOTES}_{POSTID}"
         self.filename_restriction_scheme = None
+        self.write_xmp: bool = False
+        self.write_title: bool = False
+        self.exiftool_path: str = "exiftool"
+        self.exiftool_config: Optional[str] = None
         self.folder_scheme: str = "{SUBREDDIT}"
         self.ignore_user = []
         self.include_id_file = []
