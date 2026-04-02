@@ -28,6 +28,9 @@ class FileNameFormatter:
     )
     WINDOWS_MAX_PATH_LENGTH = 260
     LINUX_MAX_PATH_LENGTH = 4096
+    # ExifTool writes to <original_name>_exiftool_tmp before replacing in place.
+    # Reserve headroom so metadata writes do not fail on near-limit filenames.
+    EXIFTOOL_TEMP_HEADROOM = 32
 
     def __init__(
         self,
@@ -141,16 +144,36 @@ class FileNameFormatter:
             raise BulkDownloaderException(f"Could not determine path name: {subfolder}, {index}, {resource.extension}")
         return file_path
 
+    @staticmethod
+    def _extract_preserved_tail(filename: str) -> tuple[str, str]:
+        """
+        Preserve a parseable reddit tail when trimming long names.
+
+        Supported tails on the generated basename (before gallery index/extension):
+        - _<upvotes>_<postid>
+        - _<postid>
+        """
+        m = re.search(r"(_\d+_[A-Za-z0-9]{5,10})$", filename)
+        if m:
+            return filename[: m.start()], m.group(1)
+        m = re.search(r"(_[A-Za-z0-9]{5,10})$", filename)
+        if m:
+            return filename[: m.start()], m.group(1)
+        return filename, ""
+
     def limit_file_name_length(self, filename: str, ending: str, root: Path) -> Path:
         root = root.resolve().expanduser()
-        possible_id = re.search(r"((?:_\w{6})?$)", filename)
-        if possible_id:
-            ending = possible_id.group(1) + ending
-            filename = filename[: possible_id.start()]
+
+        # Keep votes/postid tail non-truncatable so downstream parsing stays reliable.
+        filename, preserved_tail = self._extract_preserved_tail(filename)
+        if preserved_tail:
+            ending = preserved_tail + ending
+
         max_path = self.max_path
-        max_file_part_length_chars = 255 - len(ending)
-        max_file_part_length_bytes = 255 - len(ending.encode("utf-8"))
-        max_path_length = max_path - len(ending) - len(str(root)) - 1
+        reserve = self.EXIFTOOL_TEMP_HEADROOM
+        max_file_part_length_chars = max(1, 255 - len(ending) - reserve)
+        max_file_part_length_bytes = max(1, 255 - len(ending.encode("utf-8")) - reserve)
+        max_path_length = max(1, max_path - len(ending) - len(str(root)) - 1 - reserve)
 
         out = Path(root, filename + ending)
         safe_ending = re.match(r".*\..*", ending)
@@ -162,7 +185,7 @@ class FileNameFormatter:
             ]
         ):
             filename = filename[:-1]
-            if not safe_ending and filename[-1] != ".":
+            if filename and not safe_ending and filename[-1] != ".":
                 filename = filename[:-1] + "."
             out = Path(root, filename + ending)
 
