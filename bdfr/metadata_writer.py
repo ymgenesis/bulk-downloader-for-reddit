@@ -32,11 +32,13 @@ class MetadataWriter:
         title: str,
         post_id: str,
         votes: Optional[int],
+        subreddit: Optional[str] = None,
         gallery_index: Optional[int] = None,
         write_title: bool = False,
     ) -> bool:
         user_clean = self._sanitize_like_filename(user)
         title_clean = self._sanitize_like_filename(title)
+        subreddit_clean = self._sanitize_like_filename(subreddit) if subreddit else ""
 
         cmd = [
             self.exiftool_path,
@@ -57,6 +59,8 @@ class MetadataWriter:
                 f"-XMP-Reddit:RedditPostID={post_id}",
             ]
         )
+        if subreddit_clean:
+            cmd.append(f"-XMP-Reddit:RedditSubreddit={subreddit_clean}")
 
         if votes is not None:
             cmd.append(f"-XMP-Reddit:RedditVotes={votes}")

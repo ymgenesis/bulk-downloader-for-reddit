@@ -167,6 +167,7 @@ class RedditDownloader(RedditConnector):
 			os.utime(destination, (current_time, current_time))			
 			if self.metadata_writer:
 				user = submission.author.name if submission.author else "DELETED"
+				subreddit = submission.subreddit.display_name if submission.subreddit else None
 				votes = submission.score if isinstance(submission.score, int) else None
 				meta_ok = self.metadata_writer.write_reddit_tags(
 					file_path=destination,
@@ -174,6 +175,7 @@ class RedditDownloader(RedditConnector):
 					title=submission.title,
 					post_id=submission.id,
 					votes=votes,
+					subreddit=subreddit,
 					gallery_index=gallery_index,
 					write_title=self.args.write_title,
 				)
