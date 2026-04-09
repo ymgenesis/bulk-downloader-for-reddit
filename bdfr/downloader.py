@@ -3,6 +3,7 @@
 import hashlib
 import logging.handlers
 import os
+import re
 import time
 from collections.abc import Iterable
 from datetime import datetime
@@ -24,6 +25,8 @@ from bdfr.metadata_writer import MetadataWriter
 from bdfr.site_downloaders.download_factory import DownloadFactory
 
 logger = logging.getLogger(__name__)
+
+
 
 
 def _calc_hash(existing_file: Path) -> tuple[Path, str]:
@@ -68,6 +71,41 @@ class RedditDownloader(RedditConnector):
 					logger.debug("Waiting 60 seconds to continue")
 					sleep(60)
 
+	@staticmethod
+	def _extract_redgifs_watch_url_from_oembed(submission: praw.models.Submission) -> str:
+		try:
+			secure_media = submission.secure_media or {}
+			if not isinstance(secure_media, dict):
+				return ""
+			media_type = str(secure_media.get("type", "")).lower()
+			if "redgifs" not in media_type:
+				return ""
+			oembed = secure_media.get("oembed") or {}
+			if not isinstance(oembed, dict):
+				return ""
+			html = str(oembed.get("html", "") or "")
+			if not html:
+				return ""
+			match = re.search(r"https?://(?:www\.)?redgifs\.com/ifr/([A-Za-z0-9_-]+)", html, re.IGNORECASE)
+			if not match:
+				return ""
+			slug = match.group(1)
+			return f"https://www.redgifs.com/watch/{slug}"
+		except Exception:
+			return ""
+
+	def _resolved_submission_url(self, submission: praw.models.Submission) -> str:
+		url = str(getattr(submission, "url", "") or "").strip()
+		if url:
+			return url
+		fallback = self._extract_redgifs_watch_url_from_oembed(submission)
+		if fallback:
+			logger.debug(
+				f"Submission {submission.id} had empty URL; recovered Redgifs watch URL from oEmbed: {fallback}"
+			)
+			return fallback
+		return ""
+
 	def _download_submission(self, submission: praw.models.Submission) -> None:
 		if submission.id in self.excluded_submission_ids:
 			logger.debug(f"Object {submission.id} in exclusion list, skipping")
@@ -101,15 +139,22 @@ class RedditDownloader(RedditConnector):
 		elif not isinstance(submission, praw.models.Submission):
 			logger.warning(f"{submission.id} is not a submission")
 			return
-		elif not self.download_filter.check_url(submission.url):
-			logger.debug(f"Submission {submission.id} filtered due to URL {submission.url}")
+		resolved_url = self._resolved_submission_url(submission)
+		original_url = str(getattr(submission, "url", "") or "").strip()
+		if resolved_url and resolved_url != original_url:
+			try:
+				setattr(submission, "url", resolved_url)
+			except Exception:
+				pass
+		if not self.download_filter.check_url(resolved_url):
+			logger.debug(f"Submission {submission.id} filtered due to URL {resolved_url}")
 			return
 
 		logger.debug(f"\u001b[34mAttempting\033[0m to download submission {submission.id}")
 		try:
-			downloader_class = DownloadFactory.pull_lever(submission.url)
+			downloader_class = DownloadFactory.pull_lever(resolved_url)
 			downloader = downloader_class(submission)
-			logger.debug(f"Using {downloader_class.__name__} with url {submission.url}")
+			logger.debug(f"Using {downloader_class.__name__} with url {resolved_url}")
 		except errors.NotADownloadableLinkError as e:
 			logger.error(f"Could not download submission {submission.id}: {e}")
 			return
@@ -126,7 +171,7 @@ class RedditDownloader(RedditConnector):
 				logger.debug(f"File {destination} from submission {submission.id} already exists, continuing")
 				continue
 			elif not self.download_filter.check_resource(res):
-				logger.debug(f"Download filter removed {submission.id} file with URL {submission.url}")
+				logger.debug(f"Download filter removed {submission.id} file with URL {resolved_url}")
 				continue
 			try:
 				res.download({"max_wait_time": self.args.max_wait_time})
